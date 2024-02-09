@@ -4,8 +4,16 @@ import config from './config.json' assert { type: 'json' };
 // コマンドの定義
 const commands = [
   {
-    name: 'ping',
-    description: 'Replies with Pong!',
+    name: 'server_list',
+    description: 'サーバーのリストを表示',
+  },
+  {
+    name: 'start_server',
+    description: 'サーバーを起動',
+  },
+  {
+    name: 'end_server',
+    description: 'サーバーを停止',
   },
 ];
 
@@ -35,37 +43,22 @@ client.on('interactionCreate', async interaction => {
   if (interaction.commandName === 'ping') {
     await interaction.reply('Pong!');
   }
+
+  switch (interaction.commandName){
+    case 'server_list':
+      await interaction.reply("list!");
+      // server.show(message);
+      break;
+    case 'start_server':
+      await interaction.reply("start!");
+      // server.start(cmd[1], message);
+      break;
+    case 'end_server':
+      await interaction.reply("end!");
+      // server.end(cmd[1], message);
+      break;
+  }
 });
 
 // クライアントのログイン
 client.login(config.discord_token);
-
-
-
-
-
-// var Discord = require("discord.js");
-
-// var client = new Discord.Client();
-
-// var server = require('./server.js');
-
-// client.on('message', message => {
-//   cmd = message.content.split(/\s+/);
-//   switch (cmd[0]){
-//     case 'help':
-//       message.reply('\nshow : サーバーの一覧を表示\nstart [server name] : 最新のスナップショットからサーバーを起動\nend [server name] : 稼働中のサーバーを停止');
-//       break;
-//     case 'show':
-//       server.show(message);
-//       break;
-//     case 'start':
-//       server.start(cmd[1], message);
-//       break;
-//     case 'end':
-//       server.end(cmd[1], message);
-//       break;
-//   }
-// });
-
-// client.login(discord_token);
