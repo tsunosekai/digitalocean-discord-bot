@@ -1,0 +1,16 @@
+{
+  "name": "digital_ocean_manager",
+  "version": "1.0.0",
+  "description": "",
+  "main": "app.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "digitalocean": "^1.2.1",
+    "discord.js": "^14.14.1",
+    "rx": "^4.1.0"
+  }
+}
