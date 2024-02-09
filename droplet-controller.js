@@ -1,15 +1,18 @@
-// const digitalocean = require('digitalocean');
 import digitalocean from 'digitalocean';
 
+// スリープ関数のユーティリティ
 const sleep = (delay)=>{
   return new Promise(resolve => setTimeout(resolve, 3000));
 }
 
+// ドロップレットを操作するクラス
 export class DropletController{
-  constructor(token, dropletSize, logger = console.log){
-    this.client = digitalocean.client(token);
-    this.dropletSize = dropletSize;
+  constructor(config, logger){
+    this.client = digitalocean.client(config.digital_ocean_token);
+    this.dropletSize = config.droplet_size;
     this.logger = logger;
+    this.list = this.list.bind(this);
+    this.start = this.start.bind(this);
   }
 
   // サーバーのリスト取得
@@ -70,7 +73,7 @@ export class DropletController{
         "image": latestsnapshot.id
       });
     }catch(error){
-      this.logger(error.message);
+      this.logger("Error: "+error.message);
       return;
     }
     this.logger('サーバー起動中…');
