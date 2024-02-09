@@ -1,5 +1,7 @@
 # digitalocean-discord-bot
 
+![image](https://github.com/tsunosekai/digitalocean-discord-bot/assets/12627757/804c5782-5d2c-4c1c-a912-03a7ee9156d6)
+
 DigitalOcean ( https://www.digitalocean.com/ ) の時間課金サーバー（ Droplet ）を Discord から起動・停止するためのボットです。
 
 予め以下の準備をしてからこのボットを起動してください。
@@ -53,3 +55,20 @@ $ npm install
 $ node app.js
 ```
 
+# How to use
+
+Bot を起動し、Discord に以下のコマンドを打ち込みます
+
+- `/list`
+
+Digital Ocean 上のドロップレットとスナップショットを取得します
+
+- `/start server_name`
+
+Digital Ocean 上で停止中のサーバー（スナップショット）からドロップレットを起動します
+
+また、起動後に IP アドレス（毎回変動）を表示します
+
+- `/end server_name`
+
+Digital Ocean 上で起動中のサーバーを停止し、スナップショット化します
