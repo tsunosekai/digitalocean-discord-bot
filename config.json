@@ -1,8 +1,8 @@
 {
-  "digital_ocean_token": "dop_v1_cb3a10155849ca873a2360b8c8f93e0dbf06cb6e091dcb965581c36d22be23db",
+  "digital_ocean_token": "",
   "droplet_size": "s-4vcpu-8gb",
 
   "discord_api_version": "10",
-  "discord_client_id": "1205483787723743272",
-  "discord_token": "MTIwNTQ4Mzc4NzcyMzc0MzI3Mg.GA9RcV.FmQ1hlOcuRNepIqfaRZG5RYhfCNKkbCK1mOh90"
+  "discord_client_id": "",
+  "discord_token": ""
 }
