@@ -19,7 +19,9 @@ DigitalOcean ( https://www.digitalocean.com/ ) の時間課金サーバー（ Dr
 - droplet_size
 
     3 で作成した Droplet のサイズ
+
     Basic の CPU 4コアの RAM が8GBなら`s-4vcpu-8gb`
+    
     https://slugs.do-api.dev/
 
 - discord_client_id
