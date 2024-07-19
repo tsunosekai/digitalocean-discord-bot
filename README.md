@@ -6,7 +6,7 @@ DigitalOcean ( https://www.digitalocean.com/ ) の時間課金サーバー（ Dr
 
 予め以下の準備をしてからこのボットを起動してください。
 
-1. Discord Bot を作成し、 CLIENT_ID と TOKEN を取得
+1. Discord Bot を作成し、 APPLICATION ID と TOKEN を取得
 
 2. Discord Bot を Discord サーバーに追加
 
@@ -26,9 +26,9 @@ DigitalOcean ( https://www.digitalocean.com/ ) の時間課金サーバー（ Dr
     
     https://slugs.do-api.dev/
 
-- discord_client_id
+- discord_APPLICATION ID
 
-    1 で取得した CLIENT_ID
+    1 で取得した APPLICATION ID
 
 - discord_token
 
