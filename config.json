@@ -3,6 +3,7 @@
   "droplet_size": "s-4vcpu-8gb",
 
   "discord_api_version": "10",
+  "guild_id": "",
   "discord_client_id": "",
   "discord_token": ""
 }
