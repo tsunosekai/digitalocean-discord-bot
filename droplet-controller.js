@@ -157,8 +157,7 @@ export class DropletController{
     servers.sort((a, b) => b.created_at - a.created_at);
     
     // リスト形式で表示（一つのメッセージにまとめる）
-    let output = '```\n';
-    output += '【サーバーリスト】\n';
+    let output = '【サーバーリスト】\n';
     
     servers.forEach(server => {
       const date = server.created_at;
@@ -179,9 +178,6 @@ export class DropletController{
       output += `  作成日時: ${formattedDate}\n`;
     });
     
-    // 終了
-    output += '```';
-    
     // 一度にすべての内容を送信
     this.logger(output);
   }
@@ -196,7 +192,7 @@ export class DropletController{
       droplets = droplets.filter(d => d.name === name);
       if(droplets.length>0){
         if(droplets[0].networks.v4.length > 0){
-          this.logger('サーバーは稼働中です\nIP : '+droplets[0].networks.v4[0].ip_address);
+          this.logger('サーバーは稼働中です\nIPアドレス：\n'+droplets[0].networks.v4[0].ip_address);
         }else{
           this.logger('サーバーは起動中です');
         }
@@ -273,7 +269,7 @@ export class DropletController{
         break;
       }
     }
-    this.logger('サーバー起動完了!（接続できない場合は数分お待ちください）\nIP :'+ip);
+    this.logger('サーバー起動完了!（接続できない場合は数分お待ちください）\nIPアドレス：\n'+ip);
   
     return true;
   }
@@ -293,28 +289,85 @@ export class DropletController{
       return false;
     }
     
-  
+    const dropletId = droplets[0].id;
+    const timestamp = Date.now();
+    const snapshotName = `${name}-${timestamp}`;
+    
     // 停止コマンド実行
-    await this.client.droplets.powerOff(droplets[0].id);
-    await sleep(1000);
-    await this.client.droplets.snapshot(droplets[0].id);
-    await sleep(1000);
-    await this.client.droplets.delete(droplets[0].id);
-    this.logger("サーバー停止中…");
-  
-    // サーバーの終了を通知
-    while(true){
-      await sleep(5*1000);
-      let droplets = await this.client.droplets.list({all: true});
-      // 名前が完全一致するドロップレットを選択
-      droplets = droplets.filter(d => d.name === name);
-      if(droplets.length == 0){
-        this.logger('サーバーは正常に終了しました!');
-        break;
+    this.logger("サーバーの電源をオフにしています...");
+    await this.client.droplets.powerOff(dropletId);
+    
+    // 電源オフの完了を待つ
+    let isPoweredOff = false;
+    while(!isPoweredOff) {
+      await sleep(3*1000);
+      const dropletInfo = await this.client.droplets.get(dropletId);
+      if(dropletInfo.status === 'off') {
+        isPoweredOff = true;
+        this.logger("サーバーの電源がオフになりました。スナップショットを作成しています...");
       }
     }
-  
-    return true;
+    
+    // スナップショットを作成
+    try {
+      await this.client.droplets.snapshot(dropletId, snapshotName);
+      
+      // スナップショットの作成完了を待つ
+      let isSnapshotComplete = false;
+      let retryCount = 0;
+      const maxRetries = 60; // 最大待機回数（約5分）
+      
+      while(!isSnapshotComplete && retryCount < maxRetries) {
+        await sleep(5*1000); // 5秒待機
+        retryCount++;
+        
+        // スナップショットのリストを取得
+        const snapshots = await this.client.snapshots.list({
+          all: true,
+          includeAll: true,
+          page: 1,
+          per_page: 200,
+          resource_type: 'droplet'
+        });
+        
+        // 作成中のスナップショットを検索
+        const targetSnapshot = snapshots.find(s => s.name === snapshotName);
+        
+        if(targetSnapshot) {
+          isSnapshotComplete = true;
+          this.logger(`スナップショット「${snapshotName}」の作成が完了しました。サーバーを削除しています...`);
+        }
+      }
+      
+      if(!isSnapshotComplete) {
+        this.logger("⚠️ スナップショットの作成が確認できませんでした。サーバーは削除されません。");
+        this.logger("手動でスナップショットの作成状況を確認し、問題がなければ手動でサーバーを削除してください。");
+        return false;
+      }
+      
+      // ドロップレットを削除
+      await this.client.droplets.delete(dropletId);
+      this.logger("サーバー削除中...");
+      
+      // サーバーの終了を通知
+      while(true){
+        await sleep(5*1000);
+        let currentDroplets = await this.client.droplets.list({all: true});
+        // 名前が完全一致するドロップレットを選択
+        currentDroplets = currentDroplets.filter(d => d.name === name);
+        if(currentDroplets.length == 0){
+          this.logger('サーバーは正常に終了しました!');
+          break;
+        }
+      }
+      
+      return true;
+      
+    } catch(error) {
+      this.logger(`⚠️ エラーが発生しました: ${error.message}`);
+      this.logger("サーバーは削除されません。手動で対応してください。");
+      return false;
+    }
   }
   
   // 特定のサーバーのスナップショットリストを表示
@@ -360,8 +413,7 @@ export class DropletController{
     });
     
     // リスト形式でスナップショットの情報を表示（一つのメッセージにまとめる）
-    let output = '```\n';
-    output += `【${name}のスナップショット一覧】\n`;
+    let output = `【${name}のスナップショット一覧】\n`;
     output += `合計: ${snapshots.length}件\n\n`;
     
     snapshots.forEach((s, index) => {
@@ -376,9 +428,6 @@ export class DropletController{
         output += '\n';
       }
     });
-    
-    // 終了
-    output += '```';
     
     // 一度にすべての内容を送信
     this.logger(output);
@@ -441,8 +490,7 @@ export class DropletController{
     this.logger(`最新の${keepCount}件のスナップショットを保持し、${snapshotsToDelete.length}件の古いスナップショットを削除します`);
     
     // リスト形式でスナップショットの情報を表示（一つのメッセージにまとめる）
-    let output = '```\n';
-    output += `【${name}のスナップショット】\n`;
+    let output = `【${name}のスナップショット】\n`;
     output += `最新の${keepCount}件を保持し、${snapshotsToDelete.length}件を削除します\n\n`;
     
     // 保持するスナップショットの情報を表示
@@ -464,9 +512,6 @@ export class DropletController{
       output += `  ${index + 1}. ${s.name}\n`;
       output += `     作成日時: ${formattedDate}\n`;
     });
-    
-    // 終了
-    output += '```';
     
     // 一度にすべての内容を送信
     this.logger(output);
