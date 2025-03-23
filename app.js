@@ -16,8 +16,8 @@ async function registerCommands() {
   const serverNames = await getServerNames();
   console.log('サーバー名のリスト:', serverNames);
   
-  // サーバー名の選択肢を作成
-  const serverChoices = serverNames.map(name => ({
+  // サーバー名の選択肢を作成（最大25個まで）
+  const serverChoices = serverNames.slice(0, 25).map(name => ({
     name: name,
     value: name
   }));
@@ -31,8 +31,9 @@ async function registerCommands() {
     new SlashCommandBuilder()
       .setName('start')
       .setDescription('サーバーを起動')
-      .addStringOption(option =>
-        option.setName('server_name')
+      .addStringOption(option => 
+        option
+          .setName('server_name')
           .setDescription('起動するサーバーの名前')
           .setRequired(true)
           .addChoices(...serverChoices)
@@ -41,8 +42,9 @@ async function registerCommands() {
     new SlashCommandBuilder()
       .setName('end')
       .setDescription('サーバーを停止')
-      .addStringOption(option =>
-        option.setName('server_name')
+      .addStringOption(option => 
+        option
+          .setName('server_name')
           .setDescription('停止するサーバーの名前')
           .setRequired(true)
           .addChoices(...serverChoices)
@@ -51,8 +53,9 @@ async function registerCommands() {
     new SlashCommandBuilder()
       .setName('snapshot-list')
       .setDescription('サーバーのスナップショット一覧を表示')
-      .addStringOption(option =>
-        option.setName('server_name')
+      .addStringOption(option => 
+        option
+          .setName('server_name')
           .setDescription('対象のサーバー名')
           .setRequired(true)
           .addChoices(...serverChoices)
@@ -61,8 +64,9 @@ async function registerCommands() {
     new SlashCommandBuilder()
       .setName('cleanup')
       .setDescription('古いスナップショットを削除')
-      .addStringOption(option =>
-        option.setName('server_name')
+      .addStringOption(option => 
+        option
+          .setName('server_name')
           .setDescription('対象のサーバー名')
           .setRequired(true)
           .addChoices(...serverChoices)
