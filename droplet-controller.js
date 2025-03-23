@@ -24,22 +24,73 @@ export class DropletController{
     this.logger = logger;
     this.list = this.list.bind(this);
     this.start = this.start.bind(this);
+    this.end = this.end.bind(this);
+    this.cleanup = this.cleanup.bind(this);
+    this.snapshotList = this.snapshotList.bind(this);
+    this.getServerNames = this.getServerNames.bind(this);
+  }
+  
+  // サーバー名のリストを取得
+  async getServerNames() {
+    let serverNames = new Set();
+    
+    // 稼働中・起動中のサーバーを取得
+    let droplets = await this.client.droplets.list({all: true});
+    droplets.forEach(d => {
+      serverNames.add(d.name);
+    });
+    
+    // スナップショットを取得
+    let snapshots = await this.client.snapshots.list({
+      all: true,
+      includeAll: true,
+      page: 1,
+      per_page: 200,
+      resource_type: 'droplet'
+    });
+    
+    // スナップショットからサーバー名を抽出
+    snapshots.forEach(s => {
+      let serverName = s.name;
+      const dashIndex = s.name.indexOf('-');
+      if (dashIndex !== -1) {
+        serverName = s.name.substring(0, dashIndex);
+      }
+      serverNames.add(serverName);
+    });
+    
+    return Array.from(serverNames);
   }
 
   // サーバーのリスト取得
   async list(){
     this.logger('サーバーのリストを取得中…');
     let already = [];
-    let text = '\n';
+    let servers = [];
+    
+    // 稼働中・起動中のサーバーを取得
     let droplets = await this.client.droplets.list({all: true});
-    droplets.forEach(d=>{
+    droplets.forEach(d => {
+      let status = '起動中';
+      let ip = '';
+      let snapshotInfo = '';
+      
       if(d.networks.v4.length > 0){
-        text += d.name + ' :' + d.networks.v4[0].ip_address + ' [稼働中]\n';
-      }else{
-        text += d.name + ' [起動中]\n';
+        status = '稼働中';
+        ip = d.networks.v4[0].ip_address;
       }
+      
+      servers.push({
+        name: d.name,
+        status: status,
+        ip: ip,
+        snapshotInfo: snapshotInfo,
+        created_at: new Date(d.created_at)
+      });
+      
       already.push(d.name);
     });
+    
     // スナップショットを取得
     let snapshots = await this.client.snapshots.list({
       all: true,
@@ -92,9 +143,47 @@ export class DropletController{
       
       const latestSnapshot = serverSnapshots[0];
       already.push(serverName);
-      text += `${serverName} [停止中（スナップショット）] (最新: ${latestSnapshot.name})\n`;
+      
+      servers.push({
+        name: serverName,
+        status: '停止中',
+        ip: '',
+        snapshotInfo: latestSnapshot.name,
+        created_at: new Date(latestSnapshot.created_at)
+      });
     }
-    this.logger(text);
+    
+    // サーバーを作成日時の降順でソート
+    servers.sort((a, b) => b.created_at - a.created_at);
+    
+    // リスト形式で表示（一つのメッセージにまとめる）
+    let output = '```\n';
+    output += '【サーバーリスト】\n';
+    
+    servers.forEach(server => {
+      const date = server.created_at;
+      const formattedDate = `${date.getFullYear()}/${(date.getMonth()+1).toString().padStart(2, '0')}/${date.getDate().toString().padStart(2, '0')} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+      
+      output += '\n';
+      output += `■ ${server.name}\n`;
+      output += `  状態: ${server.status}\n`;
+      
+      if (server.ip) {
+        output += `  IPアドレス: ${server.ip}\n`;
+      }
+      
+      if (server.snapshotInfo) {
+        output += `  スナップショット: ${server.snapshotInfo}\n`;
+      }
+      
+      output += `  作成日時: ${formattedDate}\n`;
+    });
+    
+    // 終了
+    output += '```';
+    
+    // 一度にすべての内容を送信
+    this.logger(output);
   }
 
   // サーバー起動
@@ -225,6 +314,185 @@ export class DropletController{
       }
     }
   
+    return true;
+  }
+  
+  // 特定のサーバーのスナップショットリストを表示
+  async snapshotList(name) {
+    this.logger(`サーバー "${name}" のスナップショットリストを取得中...`);
+    
+    // スナップショットを取得
+    let snapshots = await this.client.snapshots.list({
+      all: true,
+      includeAll: true,
+      page: 1,
+      per_page: 200,
+      resource_type: 'droplet'
+    });
+    
+    // 指定されたサーバー名に関連するスナップショットのみをフィルタリング
+    snapshots = snapshots.filter(s => 
+      s.name === name || 
+      s.name.startsWith(`${name}-`)
+    );
+    
+    if (snapshots.length === 0) {
+      this.logger(`サーバー "${name}" のスナップショットが見つかりません`);
+      return false;
+    }
+    
+    // スナップショットを作成日時の降順でソート
+    snapshots.sort((a, b) => {
+      // まず作成日時で比較
+      const dateComparison = new Date(b.created_at) - new Date(a.created_at);
+      if (dateComparison !== 0) return dateComparison;
+      
+      // 作成日時が同じ場合、名前に含まれるタイムスタンプで比較
+      const aTimestamp = extractTimestamp(a.name);
+      const bTimestamp = extractTimestamp(b.name);
+      
+      if (aTimestamp && bTimestamp) {
+        return bTimestamp - aTimestamp;
+      }
+      
+      // タイムスタンプが取得できない場合は名前で比較
+      return b.name.localeCompare(a.name);
+    });
+    
+    // リスト形式でスナップショットの情報を表示（一つのメッセージにまとめる）
+    let output = '```\n';
+    output += `【${name}のスナップショット一覧】\n`;
+    output += `合計: ${snapshots.length}件\n\n`;
+    
+    snapshots.forEach((s, index) => {
+      const date = new Date(s.created_at);
+      const formattedDate = `${date.getFullYear()}/${(date.getMonth()+1).toString().padStart(2, '0')}/${date.getDate().toString().padStart(2, '0')} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+      
+      output += `${index + 1}. ${s.name}\n`;
+      output += `   作成日時: ${formattedDate}\n`;
+      output += `   ID: ${s.id}\n`;
+      output += `   サイズ: ${(s.size_gigabytes || 0).toFixed(1)} GB\n`;
+      if (index < snapshots.length - 1) {
+        output += '\n';
+      }
+    });
+    
+    // 終了
+    output += '```';
+    
+    // 一度にすべての内容を送信
+    this.logger(output);
+    
+    return true;
+  }
+  
+  // 古いスナップショットを削除
+  async cleanup(name, keepCount) {
+    this.logger('古いスナップショットの削除を開始します...');
+    
+    // スナップショットを取得
+    let snapshots = await this.client.snapshots.list({
+      all: true,
+      includeAll: true,
+      page: 1,
+      per_page: 200,
+      resource_type: 'droplet'
+    });
+    
+    // 指定されたサーバー名に関連するスナップショットのみをフィルタリング
+    snapshots = snapshots.filter(s => 
+      s.name === name || 
+      s.name.startsWith(`${name}-`)
+    );
+    
+    if (snapshots.length === 0) {
+      this.logger(`サーバー "${name}" のスナップショットが見つかりません`);
+      return false;
+    }
+    
+    // スナップショットを作成日時の降順でソート
+    snapshots.sort((a, b) => {
+      // まず作成日時で比較
+      const dateComparison = new Date(b.created_at) - new Date(a.created_at);
+      if (dateComparison !== 0) return dateComparison;
+      
+      // 作成日時が同じ場合、名前に含まれるタイムスタンプで比較
+      const aTimestamp = extractTimestamp(a.name);
+      const bTimestamp = extractTimestamp(b.name);
+      
+      if (aTimestamp && bTimestamp) {
+        return bTimestamp - aTimestamp;
+      }
+      
+      // タイムスタンプが取得できない場合は名前で比較
+      return b.name.localeCompare(a.name);
+    });
+    
+    // 保持するスナップショットの数を確認
+    if (snapshots.length <= keepCount) {
+      this.logger(`削除対象のスナップショットがありません（合計: ${snapshots.length}件、保持数: ${keepCount}件）`);
+      return false;
+    }
+    
+    // 削除対象のスナップショットを特定
+    const snapshotsToKeep = snapshots.slice(0, keepCount);
+    const snapshotsToDelete = snapshots.slice(keepCount);
+    
+    this.logger(`最新の${keepCount}件のスナップショットを保持し、${snapshotsToDelete.length}件の古いスナップショットを削除します`);
+    
+    // リスト形式でスナップショットの情報を表示（一つのメッセージにまとめる）
+    let output = '```\n';
+    output += `【${name}のスナップショット】\n`;
+    output += `最新の${keepCount}件を保持し、${snapshotsToDelete.length}件を削除します\n\n`;
+    
+    // 保持するスナップショットの情報を表示
+    output += '◆ 保持するスナップショット\n';
+    snapshotsToKeep.forEach((s, index) => {
+      const date = new Date(s.created_at);
+      const formattedDate = `${date.getFullYear()}/${(date.getMonth()+1).toString().padStart(2, '0')}/${date.getDate().toString().padStart(2, '0')} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+      
+      output += `  ${index + 1}. ${s.name}\n`;
+      output += `     作成日時: ${formattedDate}\n`;
+    });
+    
+    // 削除するスナップショットの情報を表示
+    output += '\n◆ 削除するスナップショット\n';
+    snapshotsToDelete.forEach((s, index) => {
+      const date = new Date(s.created_at);
+      const formattedDate = `${date.getFullYear()}/${(date.getMonth()+1).toString().padStart(2, '0')}/${date.getDate().toString().padStart(2, '0')} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+      
+      output += `  ${index + 1}. ${s.name}\n`;
+      output += `     作成日時: ${formattedDate}\n`;
+    });
+    
+    // 終了
+    output += '```';
+    
+    // 一度にすべての内容を送信
+    this.logger(output);
+    
+    // 削除の確認
+    this.logger('削除を開始します...');
+    
+    // スナップショットを削除
+    let successCount = 0;
+    let errorCount = 0;
+    
+    for (const snapshot of snapshotsToDelete) {
+      try {
+        await this.client.snapshots.delete(snapshot.id);
+        this.logger(`削除成功: ${snapshot.name}`);
+        successCount++;
+      } catch (error) {
+        this.logger(`削除失敗: ${snapshot.name} (エラー: ${error.message})`);
+        errorCount++;
+      }
+      
+      // APIレート制限を避けるために少し待機
+      await sleep(1000);
+    }
+    
+    this.logger(`削除処理が完了しました（成功: ${successCount}件、失敗: ${errorCount}件）`);
     return true;
   }
 }

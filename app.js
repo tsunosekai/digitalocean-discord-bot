@@ -1,50 +1,96 @@
-import { REST, Routes, Client, GatewayIntentBits, Message } from 'discord.js';
+import { REST, Routes, Client, GatewayIntentBits, SlashCommandBuilder } from 'discord.js';
 import { DropletController } from './droplet-controller.js';
 
 import config from './config.json' assert { type: 'json' };
 
-// コマンドの定義
-const commands = [
-  {
-    name: 'list',
-    description: 'サーバーのリストを表示',
-  },
-  {
-    name: 'start',
-    description: 'サーバーを起動',
-    options: [
-      {
-        name: 'server_name',
-        description: '起動するサーバーの名前',
-        type: 3,
-        required: true
-      }
-    ]
-  },
-  {
-    name: 'end',
-    description: 'サーバーを停止',
-    options: [
-      {
-        name: 'server_name',
-        description: '停止するサーバーの名前',
-        type: 3,
-        required: true
-      }
-    ]
-  },
-];
-
-const rest = new REST({ version: config.discord_api_version }).setToken(config.discord_token);
-
-// コマンドの更新
-try {
-  console.log('Started refreshing application (/) commands.');
-  await rest.put(Routes.applicationCommands(config.discord_client_id), { body: commands });
-  console.log('Successfully reloaded application (/) commands.');
-} catch (error) {
-  console.error(error);
+// サーバー名のリストを取得する関数
+async function getServerNames() {
+  const tempLogger = () => {}; // 一時的なロガー（出力しない）
+  const dropletController = new DropletController(config, tempLogger);
+  return await dropletController.getServerNames();
 }
+
+// コマンドを登録する関数
+async function registerCommands() {
+  // サーバー名のリストを取得
+  const serverNames = await getServerNames();
+  console.log('サーバー名のリスト:', serverNames);
+  
+  // サーバー名の選択肢を作成
+  const serverChoices = serverNames.map(name => ({
+    name: name,
+    value: name
+  }));
+  
+  // コマンドの定義をSlashCommandBuilderで書き直す
+  const commands = [
+    new SlashCommandBuilder()
+      .setName('list')
+      .setDescription('サーバーのリストを表示'),
+
+    new SlashCommandBuilder()
+      .setName('start')
+      .setDescription('サーバーを起動')
+      .addStringOption(option =>
+        option.setName('server_name')
+          .setDescription('起動するサーバーの名前')
+          .setRequired(true)
+          .addChoices(...serverChoices)
+      ),
+
+    new SlashCommandBuilder()
+      .setName('end')
+      .setDescription('サーバーを停止')
+      .addStringOption(option =>
+        option.setName('server_name')
+          .setDescription('停止するサーバーの名前')
+          .setRequired(true)
+          .addChoices(...serverChoices)
+      ),
+
+    new SlashCommandBuilder()
+      .setName('snapshot-list')
+      .setDescription('サーバーのスナップショット一覧を表示')
+      .addStringOption(option =>
+        option.setName('server_name')
+          .setDescription('対象のサーバー名')
+          .setRequired(true)
+          .addChoices(...serverChoices)
+      ),
+      
+    new SlashCommandBuilder()
+      .setName('cleanup')
+      .setDescription('古いスナップショットを削除')
+      .addStringOption(option =>
+        option.setName('server_name')
+          .setDescription('対象のサーバー名')
+          .setRequired(true)
+          .addChoices(...serverChoices)
+      )
+      .addIntegerOption(option =>
+        option.setName('keep_count')
+          .setDescription('残す最新スナップショットの数（デフォルト: 3）')
+          .setRequired(false)
+      ),
+  ].map(command => command.toJSON());  // ここで必ず.toJSON()を実行する
+
+  const rest = new REST({ version: config.discord_api_version }).setToken(config.discord_token);
+
+  // コマンドの更新
+  try {
+    console.log('Started refreshing application (/) commands.');
+    await rest.put(
+      Routes.applicationGuildCommands(config.discord_client_id, config.guild_id),
+      { body: commands }
+    );
+    console.log('Successfully reloaded application (/) commands.');
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+// コマンドを登録
+registerCommands();
 
 // クライアントの作成
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
@@ -79,6 +125,14 @@ client.on('interactionCreate', async interaction => {
       break;
     case 'end':
       await dropletController.end(interaction.options.getString('server_name'));
+      break;
+    case 'snapshot-list':
+      await dropletController.snapshotList(interaction.options.getString('server_name'));
+      break;
+    case 'cleanup':
+      const serverName = interaction.options.getString('server_name');
+      const keepCount = interaction.options.getInteger('keep_count') || 3; // デフォルト値は3
+      await dropletController.cleanup(serverName, keepCount);
       break;
   }
 });
