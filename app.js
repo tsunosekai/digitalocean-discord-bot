@@ -80,9 +80,48 @@ async function registerCommands() {
 
   const rest = new REST({ version: config.discord_api_version }).setToken(config.discord_token);
 
-  // コマンドの更新
+  // 既存のコマンドを削除してから新しいコマンドを登録
   try {
     console.log('Started refreshing application (/) commands.');
+    
+    // グローバルコマンドを削除
+    console.log('Deleting global commands...');
+    try {
+      // グローバルコマンドを取得
+      const existingGlobalCommands = await rest.get(
+        Routes.applicationCommands(config.discord_client_id)
+      );
+      
+      // グローバルコマンドをすべて削除
+      console.log(`Found ${existingGlobalCommands.length} global commands to delete`);
+      for (const command of existingGlobalCommands) {
+        await rest.delete(
+          Routes.applicationCommand(config.discord_client_id, command.id)
+        );
+        console.log(`Deleted global command ${command.name}`);
+      }
+    } catch (globalError) {
+      console.error('Error deleting global commands:', globalError);
+    }
+    
+    // ギルドコマンドを削除
+    console.log('Deleting guild commands...');
+    // ギルドコマンドを取得
+    const existingGuildCommands = await rest.get(
+      Routes.applicationGuildCommands(config.discord_client_id, config.guild_id)
+    );
+    
+    // ギルドコマンドをすべて削除
+    console.log(`Found ${existingGuildCommands.length} guild commands to delete`);
+    for (const command of existingGuildCommands) {
+      await rest.delete(
+        Routes.applicationGuildCommand(config.discord_client_id, config.guild_id, command.id)
+      );
+      console.log(`Deleted guild command ${command.name}`);
+    }
+    
+    // 新しいコマンドをギルドコマンドとして登録
+    console.log('Registering new guild commands...');
     await rest.put(
       Routes.applicationGuildCommands(config.discord_client_id, config.guild_id),
       { body: commands }
