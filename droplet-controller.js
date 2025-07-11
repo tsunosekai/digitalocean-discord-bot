@@ -241,6 +241,7 @@ export class DropletController{
     });
     
     let latestsnapshot = snapshots[0]; // 最新のスナップショット
+    this.logger(`スナップショット「${latestsnapshot.name}」から起動しています...`);
     try{
       await this.client.droplets.create({
         "name": name,
